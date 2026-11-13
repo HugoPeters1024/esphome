@@ -123,11 +123,12 @@ void AdafruitNeoKey::loop() {
 
 void AdafruitNeoKey::publish_keys_(uint32_t gpio) {
   const uint8_t pressed = static_cast<uint8_t>((~gpio & KEY_MASK) >> 4);
-#ifdef USE_ADAFRUIT_NEOKEY_BINARY_SENSOR
   const uint8_t changed = this->has_sample_ ? (pressed ^ this->last_keys_) : 0x0F;
-  if (this->keys_publisher_ != nullptr && changed != 0)
-    this->keys_publisher_(pressed, changed);
-#endif
+  for (uint8_t key = 0; key < 4; key++) {
+    if ((changed & (1U << key)) != 0 && this->key_sensors_[key] != nullptr)
+      this->key_sensors_[key]->publish_state((pressed & (1U << key)) != 0);
+  }
+
   this->last_keys_ = pressed;
   this->has_sample_ = true;
 }
@@ -156,10 +157,9 @@ void AdafruitNeoKey::dump_config() {
   ESP_LOGCONFIG(TAG, "  Update interval: %u ms", static_cast<unsigned>(this->update_interval_ms_));
   ESP_LOGCONFIG(TAG, "  Read delay: %u ms", static_cast<unsigned>(this->read_delay_ms_));
   ESP_LOGCONFIG(TAG, "  Keys 1-4 use NeoKey internal pins 4-7 (active low)");
-#ifdef USE_ADAFRUIT_NEOKEY_BINARY_SENSOR
-  if (this->dump_publisher_ != nullptr)
-    this->dump_publisher_(TAG);
-#endif
+  for (auto *sensor : this->key_sensors_) {
+    LOG_BINARY_SENSOR("  ", "Key", sensor);
+  }
 }
 
 }  // namespace esphome::adafruit_neokey

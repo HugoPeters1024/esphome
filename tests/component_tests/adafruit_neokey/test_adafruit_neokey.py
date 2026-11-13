@@ -111,10 +111,9 @@ def test_codegen_keeps_boards_and_keys_separate(
     )
     main = generate_main(config)
     for board in ("a", "b"):
-        assert f"esphome__neokey_{board}__keys_fn" in main
-        assert f"esphome__neokey_{board}__dump_fn" in main
+        assert f"neokey_{board}->set_key_sensor" in main
     assert "set_read_delay(1)" in main
     assert "set_read_delay(8)" in main
     assert "set_update_interval(16)" in main
     assert "set_update_interval(20)" in main
-    assert main.count("changed &") == 8
+    assert main.count("set_key_sensor(") == 8

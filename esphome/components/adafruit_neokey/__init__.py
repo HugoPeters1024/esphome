@@ -12,6 +12,7 @@ from esphome.types import ConfigType
 
 CODEOWNERS = ["@HugoPeters1024"]
 DEPENDENCIES = ["i2c"]
+AUTO_LOAD = ["binary_sensor"]
 DOMAIN = "adafruit_neokey"
 MULTI_CONF = True
 
@@ -21,14 +22,6 @@ adafruit_neokey_ns = cg.esphome_ns.namespace(DOMAIN)
 AdafruitNeoKey = adafruit_neokey_ns.class_(
     "AdafruitNeoKey", cg.Component, i2c.I2CDevice
 )
-KEY_PUBLISHER = cg.HubFunction(
-    "keys",
-    cg.void,
-    [(cg.uint8, "pressed"), (cg.uint8, "changed")],
-    define="USE_ADAFRUIT_NEOKEY_BINARY_SENSOR",
-)
-DUMP_PUBLISHER = cg.HubFunction("dump", cg.void, [(cg.const_char_ptr, "tag")])
-
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -75,6 +68,8 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def to_code(config: ConfigType) -> None:
-    var = await i2c.new_i2c_component(config)
+    var = cg.new_Pvariable(config[CONF_ID])
+    await cg.register_component(var, config)
+    await i2c.register_i2c_device(var, config)
     cg.add(var.set_read_delay(config[CONF_READ_DELAY]))
     cg.add(var.set_update_interval(config[CONF_UPDATE_INTERVAL]))

@@ -72,6 +72,13 @@ class FakeBus : public i2c::I2CBus {
 
 class TestNeoKey : public AdafruitNeoKey {
  public:
+  void record_to(std::vector<std::pair<uint8_t, uint8_t>> *events) {
+    for (uint8_t key = 0; key < 4; key++) {
+      this->set_key_sensor(key, &this->sensors_[key]);
+      this->sensors_[key].add_on_state_callback([events, key](bool state) { events->emplace_back(key, state); });
+    }
+  }
+  binary_sensor::BinarySensor sensors_[4];
   bool ready() const { return this->ready_; }
   void prepare() { this->ready_ = true; }
   void restart() {
@@ -100,7 +107,7 @@ class NeoKeyTest : public ::testing::Test {
     this->board_.set_i2c_bus(&this->bus_);
     this->board_.set_i2c_address(0x30);
     this->board_.set_read_delay(1);
-    this->board_.set_keys_publisher([](uint8_t pressed, uint8_t changed) { snapshots.emplace_back(pressed, changed); });
+    this->board_.record_to(&snapshots);
   }
   void TearDown() override { this->board_.stop(); }
   void loop_at(uint32_t now) {
@@ -134,7 +141,7 @@ TEST_F(NeoKeyTest, InitializesInputsWithBigEndianMasksAndPublishesHeldKeys) {
   const std::array<uint8_t, 4> registers{3, 0x0B, 5, 9};
   for (size_t i = 0; i < registers.size(); i++)
     EXPECT_EQ(this->bus_.writes[i + 3], (std::vector<uint8_t>{1, registers[i], 0, 0, 0, 0xF0}));
-  EXPECT_EQ(snapshots, (std::vector<std::pair<uint8_t, uint8_t>>{{5, 15}}));
+  EXPECT_EQ(snapshots, (std::vector<std::pair<uint8_t, uint8_t>>{{0, 1}, {1, 0}, {2, 1}, {3, 0}}));
 }
 
 TEST_F(NeoKeyTest, AllKeyCombinationsAndHeldKeys) {
@@ -142,11 +149,16 @@ TEST_F(NeoKeyTest, AllKeyCombinationsAndHeldKeys) {
   uint8_t previous = 0;
   for (uint8_t pressed = 0; pressed < 16; pressed++) {
     this->sample(pressed);
-    ASSERT_EQ(snapshots.size(), pressed + 1U);
-    EXPECT_EQ(snapshots.back(),
-              (std::pair<uint8_t, uint8_t>{pressed, pressed == 0 ? uint8_t{15} : uint8_t(pressed ^ previous)}));
+    const uint8_t changed = pressed == 0 ? 15 : (pressed ^ previous);
+    std::vector<std::pair<uint8_t, uint8_t>> expected;
+    for (uint8_t key = 0; key < 4; key++) {
+      if (changed & (1U << key))
+        expected.emplace_back(key, (pressed >> key) & 1U);
+    }
+    EXPECT_EQ(snapshots, expected);
+    snapshots.clear();
     this->sample(pressed);
-    EXPECT_EQ(snapshots.size(), pressed + 1U);
+    EXPECT_TRUE(snapshots.empty());
     previous = pressed;
   }
 }
@@ -173,7 +185,7 @@ TEST_F(NeoKeyTest, FailedSelectionDoesNotReadOrPublish) {
   const auto reads = this->bus_.reads;
   this->sample(15);
   EXPECT_EQ(this->bus_.reads, reads);
-  EXPECT_EQ(snapshots.size(), 1U);
+  EXPECT_EQ(snapshots.size(), 4U);
   EXPECT_TRUE(this->board_.status_has_warning());
 }
 
@@ -183,7 +195,7 @@ TEST_F(NeoKeyTest, FailedReadsKeepStateAndRecoverWithoutInventingTransitions) {
   this->bus_.fail_reads = true;
   for (int i = 0; i < 3; i++)
     this->sample(0);
-  EXPECT_EQ(snapshots.size(), 1U);
+  EXPECT_EQ(snapshots.size(), 4U);
   EXPECT_FALSE(this->board_.ready());
   EXPECT_TRUE(this->board_.status_has_warning());
   const auto writes = this->bus_.writes.size();
@@ -197,8 +209,9 @@ TEST_F(NeoKeyTest, FailedReadsKeepStateAndRecoverWithoutInventingTransitions) {
   run_scheduler(530);
   EXPECT_TRUE(this->board_.ready());
   EXPECT_FALSE(this->board_.status_has_warning());
-  ASSERT_EQ(snapshots.size(), 2U);
-  EXPECT_EQ(snapshots.back(), (std::pair<uint8_t, uint8_t>{0, 15}));
+  ASSERT_EQ(snapshots.size(), 8U);
+  for (uint8_t key = 0; key < 4; key++)
+    EXPECT_EQ(snapshots[4 + key], (std::pair<uint8_t, uint8_t>{key, 0}));
 }
 
 TEST_F(NeoKeyTest, MissingBoardAtStartupCanRecover) {
@@ -240,7 +253,7 @@ TEST_F(NeoKeyTest, BoardsHaveIndependentTransactionsAndState) {
   second.set_i2c_bus(&second_bus);
   second.set_i2c_address(0x31);
   second.set_read_delay(1);
-  second.set_keys_publisher([](uint8_t pressed, uint8_t changed) { second_snapshots.emplace_back(pressed, changed); });
+  second.record_to(&second_snapshots);
   this->board_.prepare();
   second.prepare();
   this->sample(1);
@@ -249,9 +262,8 @@ TEST_F(NeoKeyTest, BoardsHaveIndependentTransactionsAndState) {
     second.loop();
   }
   run_scheduler(3);
-  EXPECT_EQ(snapshots.back().first, 1);
-  ASSERT_EQ(second_snapshots.size(), 1U);
-  EXPECT_EQ(second_snapshots.back().first, 8);
+  EXPECT_EQ(snapshots, (std::vector<std::pair<uint8_t, uint8_t>>{{0, 1}, {1, 0}, {2, 0}, {3, 0}}));
+  EXPECT_EQ(second_snapshots, (std::vector<std::pair<uint8_t, uint8_t>>{{0, 0}, {1, 0}, {2, 0}, {3, 1}}));
   second.stop();
 }
 

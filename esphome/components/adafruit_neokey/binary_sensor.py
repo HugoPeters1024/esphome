@@ -1,4 +1,3 @@
-from esphome.automation import parent_ref
 import esphome.codegen as cg
 from esphome.components import binary_sensor
 import esphome.config_validation as cv
@@ -6,13 +5,7 @@ from esphome.const import CONF_BINARY_SENSOR, CONF_KEY, CONF_PLATFORM
 import esphome.final_validate as fv
 from esphome.types import ConfigType
 
-from . import (
-    CONF_ADAFRUIT_NEOKEY_ID,
-    DOMAIN,
-    DUMP_PUBLISHER,
-    KEY_PUBLISHER,
-    AdafruitNeoKey,
-)
+from . import CONF_ADAFRUIT_NEOKEY_ID, DOMAIN, AdafruitNeoKey
 
 DEPENDENCIES = [DOMAIN]
 
@@ -41,13 +34,4 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 async def to_code(config: ConfigType) -> None:
     var = await binary_sensor.new_binary_sensor(config)
     hub = await cg.get_variable(config[CONF_ADAFRUIT_NEOKEY_ID])
-    mask = 1 << (config[CONF_KEY] - 1)
-    changed = KEY_PUBLISHER.param("changed") & mask
-    publish = parent_ref(var).publish_state(KEY_PUBLISHER.param("pressed") & mask)
-    KEY_PUBLISHER.add(hub, cg.RawStatement(f"if ({changed}) {{ {publish}; }}"))
-    DUMP_PUBLISHER.add(
-        hub,
-        cg.RawStatement(
-            f'binary_sensor::log_binary_sensor({DUMP_PUBLISHER.param("tag")}, "  ", "Key", {parent_ref(var)});'
-        ),
-    )
+    cg.add(hub.set_key_sensor(config[CONF_KEY] - 1, var))
