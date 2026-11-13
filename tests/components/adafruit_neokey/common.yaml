@@ -1,0 +1,47 @@
+adafruit_neokey:
+  - id: neokey_a
+    i2c_id: i2c_bus
+    address: 0x30
+  - id: neokey_b
+    i2c_id: i2c_bus
+    address: 0x31
+    update_interval: 20ms
+    read_delay: 1ms
+
+binary_sensor:
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_a
+    key: 1
+    name: NeoKey A Key 1
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_a
+    key: 2
+    name: NeoKey A Key 2
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_a
+    key: 3
+    name: NeoKey A Key 3
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_a
+    key: 4
+    name: NeoKey A Key 4
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_b
+    key: 1
+    name: NeoKey B Key 1
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_b
+    key: 2
+    name: NeoKey B Key 2
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_b
+    key: 3
+    name: NeoKey B Key 3
+  - platform: adafruit_neokey
+    adafruit_neokey_id: neokey_b
+    key: 4
+    name: NeoKey B Key 4
+    on_press:
+      - logger.log: Key pressed
+    on_release:
+      - logger.log: Key released
